@@ -1,21 +1,19 @@
 import { useState } from "react";
 
-interface PaymentParams {
-  paymentUrl: string;
-  parameters: Record<string, string>;
-}
-
 export default function App() {
-  const [paymentParams, setPaymentParams] = useState<PaymentParams | null>(null);
   const [accessToken, setAccessToken] = useState("");
   const [referenceNumber, setReferenceNumber] = useState(`TEST-${Date.now()}`);
   const [loading, setLoading] = useState(false);
 
-  const initiatePayment = async () => {
+  const initiatePaymentAndRedirect = async () => {
     setLoading(true);
     try {
+      // Generate fresh reference number for each payment attempt
+      const freshReferenceNumber = `TEST-${Date.now()}`;
+      setReferenceNumber(freshReferenceNumber);
+
       const payload = {
-        referenceNumber,
+        referenceNumber: freshReferenceNumber,
         amount: "100.00",
         currency: "USD"
       };
@@ -36,35 +34,35 @@ export default function App() {
 
       if (!data.success || !data.data) {
         alert("Failed: " + (data.message || "Unknown error"));
+        setLoading(false);
         return;
       }
 
-      setPaymentParams(data.data);
+      // ✅ CRITICAL: Immediately submit to Cybersource without caching
+      // Each transaction_uuid is unique and expires in 15 minutes
+      const { paymentUrl, parameters } = data.data;
+      
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = paymentUrl;
+
+      for (const [key, value] of Object.entries(parameters)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value as string;
+        form.appendChild(input);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
+      
+      // Note: Loading state will persist as page redirects
     } catch (err) {
       console.error("Payment initiation error:", err);
       alert("Error initiating payment");
-    } finally {
       setLoading(false);
     }
-  };
-
-  const goToCybersource = () => {
-    if (!paymentParams) return;
-
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = paymentParams.paymentUrl;
-
-    for (const [key, value] of Object.entries(paymentParams.parameters)) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    }
-
-    document.body.appendChild(form);
-    form.submit();
   };
 
   return (
@@ -161,7 +159,7 @@ export default function App() {
         </div>
 
         <button 
-          onClick={initiatePayment} 
+          onClick={initiatePaymentAndRedirect} 
           disabled={loading}
           style={{
             width: "100%",
@@ -182,62 +180,25 @@ export default function App() {
             if (!loading) e.currentTarget.style.backgroundColor = "#1a1a1a";
           }}
         >
-          {loading ? "Fetching..." : "Fetch Signed Payment Data"}
+          {loading ? "Processing..." : "Pay Now $100"}
         </button>
 
-        {paymentParams && (
-          <div style={{ marginTop: "2rem" }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              marginBottom: "1rem"
-            }}>
-              <span style={{ fontSize: "1.25rem" }}>✓</span>
-              <h3 style={{
-                fontSize: "1rem",
-                fontWeight: "600",
-                color: "#1a1a1a",
-                margin: 0
-              }}>
-                Signed Parameters
-              </h3>
-            </div>
-            <pre style={{
-              backgroundColor: "#f8f8f8",
-              padding: "1rem",
-              borderRadius: "6px",
-              overflowX: "auto",
-              fontSize: "0.8125rem",
-              lineHeight: "1.5",
-              border: "1px solid #e5e5e5",
-              color: "#404040"
-            }}>
-              {JSON.stringify(paymentParams, null, 2)}
-            </pre>
-
-            <button
-              onClick={goToCybersource}
-              style={{
-                width: "100%",
-                marginTop: "1rem",
-                padding: "0.75rem",
-                fontSize: "0.9375rem",
-                fontWeight: "500",
-                backgroundColor: "#1a1a1a",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#404040"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1a1a1a"}
-            >
-              Proceed to Payment →
-            </button>
+        <div style={{
+          marginTop: "1.5rem",
+          padding: "1rem",
+          backgroundColor: "#fffbeb",
+          border: "1px solid #fef3c7",
+          borderRadius: "6px"
+        }}>
+          <div style={{
+            fontSize: "0.75rem",
+            color: "#92400e",
+            lineHeight: "1.5"
+          }}>
+            <strong>⚠️ Note:</strong> Each payment generates a fresh transaction UUID that expires in 15 minutes. 
+            You'll be redirected to Cybersource immediately after initiating payment.
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

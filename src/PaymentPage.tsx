@@ -1,4 +1,3 @@
-"use client";
 import { useState } from "react";
 
 export default function PaymentPage() {
@@ -8,7 +7,8 @@ export default function PaymentPage() {
     setLoading(true);
 
     try {
-      // STEP 1: Call backend to initiate payment
+      // ✅ CRITICAL: Generate fresh payment parameters for each attempt
+      // Each transaction_uuid is unique and expires in 15 minutes
       const response = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: {
@@ -26,15 +26,17 @@ export default function PaymentPage() {
 
       if (!result.success || !result.data?.signatureValid) {
         alert("Payment initialization failed: " + result.message);
+        setLoading(false);
         return;
       }
 
-      // STEP 2: Submit form to Cybersource
+      // ✅ Immediately submit to Cybersource without caching parameters
       submitPaymentForm(result.data.paymentUrl, result.data.parameters);
+      
+      // Note: Loading state will persist as page redirects
     } catch (error) {
       console.error("Payment error:", error);
       alert("Payment initiation failed");
-    } finally {
       setLoading(false);
     }
   };
